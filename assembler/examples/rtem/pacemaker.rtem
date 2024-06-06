@@ -1,0 +1,53 @@
+.NextTrans
+init: # 7
+    PSH VS | VP
+    PSH AS | AP
+    NXT 0 2  # VS|VP, AS|AP
+        init
+        pre_VSVP vevent=0
+        pre_ASAP vevent=0
+        pre_ASAP vevent=0
+pre_ASAP: # 5 
+    PSH v<aeiTicks !| AS | AP
+    NXT 0 1                             # (v>aeiTicks | AS | AP)
+        pre_ASAP                         # on !(v>aeiTicks | AS | AP)
+        pre_VSVP_pre_URI v=0             # on (v>aeiTicks | AS | AP)
+pre_VSVP: # 6
+    PSH v<aviTicks !|! vevent<lriTicks | VS | VP
+    NXT 0 1
+        pre_VSVP                    # on !(v>aviTicks | vevent>lriTicks | VS | VP)
+        pre_ASAP vevent=0              # on (v>aviTicks | vevent>lriTicks | VS | VP)
+pre_VSVP_pre_URI: # 5
+    PSH vevent<uriTicks
+    PSH VS                     # vevent>uriTicks, VS
+    NXT 0 2
+		pre_VSVP  
+		pre_ASAP vevent=0, v=0
+		pre_VSVP_pre_URI
+		pre_ASAP vevent=0, v=0
+.NextEdits
+init:  # 3
+	PSH AP
+	EDI $0
+		VP=0 END
+pre_ASAP: # 6
+	PSH v<aeiTicks
+	PSH AP  		# v>aeiTicks, (v>aeiTicks|AP) & VP
+	EDI $0 or ~$1
+		AP=0
+	EDI $0 and ~$1
+		VP=1 END
+pre_VSVP: # 6,
+	PSH v<aviTicks !|! vevent<lriTicks
+	EDI $0 or $1
+		VP = 1
+	EDI $0 and $1
+		AP = 0 END
+pre_VSVP_pre_URI: # 6,
+	PSH VP
+	EDI !$0
+		VP=0
+	PSH vevent<uriTicks
+	EDI !$0
+		AP=0 END
+'''

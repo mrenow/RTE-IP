@@ -1,0 +1,85 @@
+48 // state_offset
+50 // trans_offset
+30 // program_length
+18 // tick_length
+00
+e8 // clock_flags
+00
+00
+00
+00 // clock_joins
+40 // clock_divider_immediate_values
+00
+00
+02
+00
+10 // main_memory .ClockConstraints
+c0
+c5
+80
+45
+80
+0c
+c4
+00
+84
+00 // trans_offset:
+04
+04
+00
+80
+00
+84
+00
+e8 // .StateAddresses state_offset:
+54
+08
+e4
+38
+0c
+44
+6c
+a3
+05
+be
+1f
+22
+01
+22
+a0
+7e
+1f
+21
+34
+a1
+e2
+23
+05
+21
+52
+84
+83
+22
+56
+76
+9f
+6a
+85
+80
+9f
+6b
+1f
+62
+c5
+a1
+c2
+6e
+45
+68
+9f
+85
+65
+05
+84
+65
+9f

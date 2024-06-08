@@ -5,7 +5,7 @@ import re
 from typing import Any
 
 from .tokens import UnresolvedCode, R, RTEMClock, RTEMClockConstraint, RTEMConstant, RTEMVar, RTEMTransition, RTEMState
-from .helpers import regular_tokenizer, parse_int
+from .helpers import regular_tokenizer, parse_int, ParsingException
 
 
 
@@ -184,11 +184,12 @@ class Commands():
                 raise ParsingException(self, line, f'Expected {regex}')
             pop = bool(toks.group(1))
             bits = self.parse_stack_logic_expr(toks.group(2))
-            if toks.group(3):
+            ex = bool(toks.group(3))
+            if ex:
                 extensions = parse_extensions(toks.group(3).strip())
             else:
                 extensions = []
-            return EDIT(), [f'011{pop:01b}{bits}', *extensions], 8
+            return EDIT(), [f'00{ex:01b}{pop:01b}{bits}', *extensions], 8
 
 
 class STD(State):

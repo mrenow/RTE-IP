@@ -69,7 +69,7 @@ wire [7:0] pc_plus_one = PC[B] + 1;
 // Multiplexers
 wire [7:0] offs_mux_out = mux_offs ? cfg_state_offs : cfg_trans_offs;
 wire [7:0] pc_a2_mux_out = mux_pc_a2 ? offs_mux_out : pc_plus_one;
-wire [7:0] pc_a1_mux_out = mux_pc_a1 ? trunc_out : ({{3{en_addr_hi}}, {5{en_addr_lo}}} & in_data);
+wire [7:0] pc_a1_mux_out = mux_pc_a1 ? {3'b0, trunc_out} : ({{3{en_addr_hi}}, {5{en_addr_lo}}} & in_data);
 
 wire [7:0] pc_a_out = pc_a2_mux_out + pc_a1_mux_out;
 
@@ -144,7 +144,6 @@ assign db_pc_E = PC[E];
 assign db_ra_E = RA[E];
 assign db_jc_E = JC[E];
 
-
 endmodule
 
 module decrementer(
@@ -153,6 +152,6 @@ module decrementer(
     output c
 );
 
-// Decrement the input value by 1
-assign {c, out} = in - 1'b1;
+    // Decrement the input value by 1
+    assign {c, out} = in - 1'b1;
 endmodule

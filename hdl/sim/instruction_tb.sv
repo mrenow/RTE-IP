@@ -1,4 +1,8 @@
 `timescale 1ns / 1ps
+`ifndef XILINX_SIMULATOR
+`define XILINX_SIMULATOR
+`endif
+`include "symbol_translation.sv"
 //////////////////////////////////////////////////////////////////////////////////
 // Company: 
 // Engineer: 
@@ -74,6 +78,8 @@ wire [3:0] db_clock_4;
 wire [11:0] db_clock_5;
 wire [3:0] db_clock_6;
 wire [11:0] db_clock_7;
+wire db_event_flush;
+wire db_event_setup;
 
 wire [11:0] db_clocks [7:0];
 
@@ -170,70 +176,20 @@ always #5 clk = ~clk;
 
 // Stream in arbitaray length data from a file backwards
 parameter CONF_LEN = 14;
-parameter MEM_LEN = 64;
+parameter MEM_LEN = 128;
 reg [0:7] data [CONF_LEN + MEM_LEN - 1 : 0];
 integer curr_byte;
 integer i;
 integer cyclenum = 0;
 integer ticknum = 0;
-function string get_input_symbol(input [4:0] bits);
-    case(bits)
-        5'd30: get_input_symbol = "AS";
-        5'd31: get_input_symbol = "AP";
-        5'd0: get_input_symbol = "CLK(v<aeiTicks)";
-        5'd1: get_input_symbol = "CLK(v<aviTicks)";
-        5'd2: get_input_symbol = "CLK(vevent<lriTicks)";
-        5'd4: get_input_symbol = "CLK(vevent<uriTicks)";
-        5'd3: get_input_symbol = "VS";
-        5'd5: get_input_symbol = "VP";
-        default: get_input_symbol = $sformatf("<UNRECOGNIZED %d>", bits);
-    endcase
-endfunction
-function string get_clock_symbol(input [2:0] bits);
-    case(bits)
-        3'd0: get_clock_symbol = "v";
-        3'd5: get_clock_symbol = "vevent";
-        default: get_clock_symbol = $sformatf("<UNRECOGNIZED %d>", bits);
-    endcase
-endfunction
-function string get_imm_symbol(input [11:0] bits);
-    case(bits)
-        12'd3: get_imm_symbol = "aviTicks";
-        12'd8: get_imm_symbol = "aeiTicks";
-        12'd18: get_imm_symbol = "uriTicks";
-        12'd19: get_imm_symbol = "lriTicks";
-        default: get_imm_symbol = $sformatf("<UNRECOGNIZED %d>", bits);
-    endcase
-endfunction
-function string get_trans_symbol(input [4:0] bits);
-    case(bits)
-        5'd0: get_trans_symbol = "TRN(init,[])";
-        5'd1: get_trans_symbol = "TRN(pre_VSVP,[vevent])";
-        5'd2: get_trans_symbol = "TRN(pre_ASAP,[vevent])";
-        5'd3: get_trans_symbol = "TRN(pre_ASAP,[])";
-        5'd4: get_trans_symbol = "TRN(pre_VSVP_pre_URI,[v])";
-        5'd5: get_trans_symbol = "TRN(pre_VSVP,[])";
-        5'd6: get_trans_symbol = "TRN(pre_ASAP,[v,vevent])";
-        5'd7: get_trans_symbol = "TRN(pre_VSVP_pre_URI,[])";
-        default: get_trans_symbol = $sformatf("<UNRECOGNIZED %d>", bits);
-    endcase
-endfunction
-function string get_state_symbol(input [3:0] bits);
-    case(bits)
-        4'd0: get_state_symbol = "pre_ASAP";
-        4'd1: get_state_symbol = "init";
-        4'd2: get_state_symbol = "pre_VSVP";
-        4'd3: get_state_symbol = "pre_VSVP_pre_URI";
-        default: get_state_symbol = $sformatf("<UNRECOGNIZED %d>", bits);
-    endcase
-endfunction
+
 function string get_reset_flags(input [7:0] bits);
     begin
         integer idx;
         get_reset_flags = "[";
         for (idx=0; idx < 8; idx=idx+1) begin
             if (bits[idx]) begin
-                get_reset_flags = {get_reset_flags, ",", get_clock_symbol(idx)};
+                get_reset_flags = {get_reset_flags, ",", get_clock_symbol(idx[2:0])};
             end
         end 
         get_reset_flags = {get_reset_flags, "]"};
@@ -248,38 +204,100 @@ endfunction
 
 function string decode_trans_instruction(input [7:0] es, input [7:0] bits, input [7:0] upper_bits);
     begin
+        automatic string ex, pop, _histar, _lostar, _op = "|", imm = $sformatf("%b", bits[3:0]);
+        if (bits[5]) ex = "(ex) "; else ex = "";
+        if (bits[4]) pop = "pop "; else pop = "";
+        if (bits[6]) _op = {"!", _op};
+        if (bits[7]) _op = {_op , "!"};
+        if (db_hi) begin _histar = "*"; _lostar = ""; end
+        else begin _histar = ""; _lostar = "*"; end
+        if (bits[7]) imm = {upper_bits, imm};
         case(es)
             FINISH: decode_trans_instruction = "FINISH";
             SETUP: decode_trans_instruction = $sformatf("SETUP %s @ %d", get_state_symbol(db_next_state), {db_next_state, 1'b0});
             INIT: decode_trans_instruction = $sformatf("INIT %d", bits[7:0]);
             STD: casex(bits[7:5])
                 3'b11?: decode_trans_instruction = "DO";
-                3'b10?: decode_trans_instruction = {"PSH ", bits[5] ? "(ex) " : "", get_input_symbol(bits[4:0])};
-                3'b01?: decode_trans_instruction = {"OP2 ", bits[5] ? "(ex) " : "",  bits[4] ? "pop " : "", $sformatf(" %b", bits[3:0])};
+                3'b10?: decode_trans_instruction = {"PSH ", ex, get_input_symbol(bits[4:0])};
+                3'b01?: decode_trans_instruction = {"OP2 ", ex,  pop, $sformatf(" %b", bits[3:0])};
                 3'b000: decode_trans_instruction = $sformatf("NXT1 %s", get_trans_symbol(bits[4:0]));
                 3'b001: decode_trans_instruction = $sformatf("NXT2 %d %d", bits[4], bits[3:0]);
             endcase 
-            ACC: decode_trans_instruction = {"ACC ", bits[6]? "!" : "",  "|", bits[7]? "! " : " ", bits[5] ? "(ex) " : "", get_input_symbol(bits[4:0])};
+            ACC: decode_trans_instruction = {"ACC ", _op , " ", ex, get_input_symbol(bits[4:0])};
             E_ACC: decode_trans_instruction = "E_ACC: Instruction Invalid";
             PSH_CLK: decode_trans_instruction = $sformatf("PSH_CLK %s %s %s %d",
                 bits[7] ? "hi": "lo",
                 get_clock_symbol({bits[5:4], bits[7]}),
                 bits[6] ? "=": "<",
-                bits[7]? {upper_bits, bits[3:0]} : bits[3:0]
+                imm
             );
             ACC_CLK: decode_trans_instruction = $sformatf("ACC_CLK %s %s %s %d",
                 bits[7] ? "hi": "lo",
                 get_clock_symbol({bits[5:4], bits[7]}),
                 bits[6] ? "=": "<",
-                bits[7]? {upper_bits, bits[3:0]} : bits[3:0]
+                imm
             );
             E_ACC_CLK: decode_trans_instruction = "E_ACC_CLK: Instruction Invalid";
 
-            T_NXT: decode_trans_instruction =  $sformatf({"T_NXT ", db_hi ? "*%s ": "%s ", db_hi ? "%s": "*%s"}, get_trans_symbol({db_data_A[4], bits[7:4]}), get_trans_symbol({db_data_A[4], bits[3:0]}));
-            T_TRA: decode_trans_instruction =  $sformatf({"T_TRA ", db_hi ? "*%s ": "%s ", db_hi ? "%s": "*%s"}, get_state_symbol(bits[7:4]), get_state_symbol(bits[3:0]));
+            T_NXT: decode_trans_instruction =  $sformatf("T_NXT %s%s %s%s", _histar, get_trans_symbol({db_data_A[4], bits[7:4]}), _lostar, get_trans_symbol({db_data_A[4], bits[3:0]}));
+            T_TRA: decode_trans_instruction =  $sformatf("T_TRA %s%s %s%s", _histar, get_state_symbol(bits[7:4]), _lostar, get_state_symbol(bits[3:0]));
             T_RST: decode_trans_instruction =  $sformatf("T_RST %s", get_reset_flags(bits));
             E_EDIT: decode_trans_instruction = "E_EDIT: Instruction Invalid";
         endcase 
+    end
+endfunction
+
+
+function string decode_edit_instruction(input [7:0] es, input [7:0] bits, input [7:0] upper_bits);
+    begin
+        automatic string ex, pop, _op = "|", _histar, _lostar, imm = $sformatf("%b", bits[3:0]);
+        if (bits[5]) ex = "(ex) "; else ex = "";
+        if (bits[4]) pop = "pop "; else pop = "";
+        if (bits[6]) _op = {"!", _op};
+        if (bits[7]) _op = {_op , "!"};
+        if (db_hi) begin _histar = ""; _lostar = "*"; end
+        else begin _histar = "*"; _lostar = ""; end
+        if (bits[7]) imm = {upper_bits, imm};
+        case(es)
+            FINISH: decode_edit_instruction = "FINISH";
+            SETUP: decode_edit_instruction = $sformatf("SETUP %s @ %d", get_state_symbol(db_next_state), {db_next_state, 1'b1});
+            INIT: decode_edit_instruction = $sformatf("INIT %d", bits[7:0]);
+            STD: casex(bits[7:6])
+                2'b11: decode_edit_instruction = "DO";
+                2'b10: decode_edit_instruction = {"PSH ", ex, get_input_symbol(bits[4:0])};
+                2'b01: decode_edit_instruction = {"OP2 ", ex, pop, $sformatf(" %b", bits[3:0])};
+                2'b00: decode_edit_instruction = {"VIO ", ex, pop, $sformatf(" %b", bits[3:0])};
+            endcase 
+            ACC: decode_edit_instruction = {"ACC ", _op, " ", ex, get_input_symbol(bits[4:0])};
+            E_ACC: decode_edit_instruction = {"E_ACC ", _op, " ", ex, get_input_symbol(bits[4:0])};
+            PSH_CLK: decode_edit_instruction = $sformatf("PSH_CLK %s %s %s %d",
+                bits[7] ? "hi": "lo",
+                get_clock_symbol({bits[5:4], bits[7]}),
+                bits[6] ? "=": "<",
+                imm
+            );
+            ACC_CLK: decode_edit_instruction = $sformatf("ACC_CLK %s %s %s %d",
+                bits[7] ? "hi": "lo",
+                get_clock_symbol({bits[5:4], bits[7]}),
+                bits[6] ? "=": "<",
+                imm
+            );
+            E_ACC_CLK: decode_edit_instruction = $sformatf("E_ACC_CLK %s %s %s %d",
+                bits[7] ? "hi": "lo",
+                get_clock_symbol({bits[5:4], bits[7]}),
+                bits[6] ? "=": "<",
+                imm
+            );
+
+            T_NXT: decode_edit_instruction = "T_NXT: Instruction Invalid";
+            T_TRA: decode_edit_instruction = "T_TRA: Instruction Invalid";
+            T_RST: decode_edit_instruction = "T_RST: Instruction Invalid";
+            E_EDIT: begin 
+                decode_edit_instruction = {"E_EDIT ", get_input_symbol(bits[4:0]), "=", bits[6]? "1": "0"};
+                if (bits[7]) decode_edit_instruction = {decode_edit_instruction, " END"};
+                if (bits[5]) decode_edit_instruction = {decode_edit_instruction, ","};
+            end 
+        endcase
     end
 endfunction
 
@@ -294,7 +312,11 @@ task monitor_trans;
 - input buffer
 */
     begin
-        reg [31:0] inputs_buf = db_inputs ~^ ({31{1'bx}} | db_inputs_valid);
+        static reg [31:0] inputs_buf = db_inputs ~^ ({32{1'bx}} | db_inputs_valid);
+        static string spacer_T;
+        static string spacer_E;
+        string instruction_string;
+        integer i;
         if (~reset) begin
             if (db_event_setup) begin
                 ticknum = ticknum + 1;
@@ -306,11 +328,18 @@ task monitor_trans;
                 cyclenum = cyclenum + 1;
                 // A
                 // $display("Transition Machine State A:");
-                $display("TICK %d GBL CYCLE %d CYCLE %d %s",  ticknum, cyclenum, db_global_clock, get_clock_string()); 
-                $display("%d Tran A: %b [%s] PC=%d RA=%d JC=%d VAR=%b HI=%b IN=%b %b %b %b",
-                $time,
-                db_rd_mem0,
-                decode_trans_instruction(db_es_T, db_rd_mem0, db_rd_mem1),
+                
+                $display("┏━━━━━━━━━━━━━━━━━━Edit B: PC[E]=%d RA[E]=%d JC[E]=%d VAR[E]=%b STK[E]=%b",
+                    db_pc_E,
+                    db_ra_E,
+                    db_jc_E,
+                    db_data_B,
+                    db_stack_E);
+                $display("┃ TICK %0d GBL %0d(#%0d) CYCLE %d %s", ticknum, cyclenum, $time, db_global_clock, get_clock_string()); 
+                
+                instruction_string = $sformatf("TRAN[%s](%b)", decode_trans_instruction(db_es_T, db_rd_mem0, db_rd_mem1), db_rd_mem0);
+                spacer_T = {instruction_string.len(){" "}};
+                $display("┗━Tran A: PC[T]=%d RA[T]=%d JC[T]=%d VAR[T]=%b HI=%b IN=%b-%b-%b-%b %s",
                 db_pc_T,
                 db_ra_T,
                 db_jc_T,
@@ -319,17 +348,34 @@ task monitor_trans;
                 inputs_buf[31:24],
                 inputs_buf[23:16],
                 inputs_buf[15:8],
-                inputs_buf[7:0]);
+                inputs_buf[7:0],
+                instruction_string);
                 // $display("PC: %b RA: %b JC: %b", db_pc_T, db_ra_T, db_jc_T);
                 // $display("VAR: %b STK: %b", db_data_A, db_stack_T);
             end else begin
-                $display("%d Tran B: PC=%d RA=%d JC=%d VAR=%b STK=%b",
-                    $time,
+                $display("┏━Tran B: PC[T]=%d RA[T]=%d JC[T]=%d VAR[T]=%b STK[T]=%b",
                     db_pc_T,
                     db_ra_T,
                     db_jc_T,
                     db_data_B,
-                    db_stack_T);                  
+                    db_stack_T);
+                $display("┃ TICK %0d GBL %0d(#%0d) CYCLE %d %s", ticknum, cyclenum, $time, db_global_clock, get_clock_string()); 
+                
+                
+                instruction_string = $sformatf("EDIT[%s](%b)", decode_edit_instruction(db_es_E, db_rd_mem0, db_rd_mem1),db_rd_mem0);
+                spacer_E = {instruction_string.len(){" "}};
+                
+                
+                $display("┗━━━━━━━━━━━━━━━━━━Edit A: PC[E]=%d RA[E]=%d JC[E]=%d VAR[E]=%b IN=%b-%b-%b-%b %s",
+                db_pc_E,
+                db_ra_E,
+                db_jc_E,
+                db_data_A,
+                inputs_buf[31:24],
+                inputs_buf[23:16],
+                inputs_buf[15:8],
+                inputs_buf[7:0],
+                instruction_string);                  
                 // B
                 // $display("Transition Machine State B:");
                 // $display("PC: %b RA: %b JC: %b", db_pc_T, db_ra_T, db_jc_T);

@@ -1,5 +1,6 @@
 `timescale 1ns / 1ps
 
+
 module inputs_module_tb;
 
 // Testbench signals

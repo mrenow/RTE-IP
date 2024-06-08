@@ -2,8 +2,9 @@
 
 import itertools
 import re
-
 from typing import *
+
+T = TypeVar('T')
 
 
 class ParsingException(Exception):
@@ -59,3 +60,17 @@ def parse_int(string: str) -> int | None:
                 return int(string, 2)
             except ValueError:
                 return None
+
+
+def int_map_to_list(map: dict[T, int], length: int | None = None) -> list[T | None]:
+    '''
+    Convert a map to a list of length `length`, where the value of the map is the index of the list.
+    '''
+    min_len = max(map.values()) + 1
+    if length is None:
+        length = min_len
+    assert min_len <= length
+    res: list[T | None] = [None] * length
+    for k, v in map.items():
+        res[v] = k
+    return res

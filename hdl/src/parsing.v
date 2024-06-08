@@ -38,27 +38,23 @@ reg HI; // Transition Only
 reg [7:0] VAR [1:0];
 
 // Internal signals
-wire [4:0] var_mux_out;      // Output of the VAR Mux
-wire [4:0] hi_mux_out;       // Output of the HI Mux
-wire [4:0] nib_mux_out;       // Output of the NIB Mux
-wire [4:0] adder_out;        // Output of the adder
 wire [3:0] function_out;     // Output of the function block (fx, b)
 wire [7:0] data_segments;    // Concatenated DATA segments
 
 
-assign addr = in_mem[4:0];   // 4-bit address input          
-assign n = in_mem[6:5];      // 2-bit n input                
+wire[3:0] addr = in_mem[3:0];   // 4-bit address input          
+wire[1:0] n = in_mem[6:5];      // 2-bit n input                
 
 // Adder operation
-assign adder_out = {1'b1, ~addr} + {3'h7, ~n};  // sign-extended 5-bit addition
+wire[4:0] adder_out = {1'b1, ~addr} + {3'h7, ~n};  // sign-extended 5-bit addition
 
-assign nib_mux_out = HI ? in_mem[7:4] : in_mem[3:0];
+wire[3:0] nib_mux_out = HI ? in_mem[7:4] : in_mem[3:0];
 
-assign hi_mux_out = mux_hi ? stack0 : VAR[T];
+wire hi_mux_out = mux_hi ? stack0 : VAR[T][0];
 // Multiplexers and Data Segmentation
-assign var_mux_out = mux_var[1] ?
+wire[4:0] var_mux_out = mux_var[1] ?
     (mux_var[0]? adder_out : {nxt_state, flag_b}) :
-    (mux_var[0]? nib_mux_out : in_mem[4:0]);
+    (mux_var[0]? {1'b0, nib_mux_out} : in_mem[4:0]);
     
 wire _en_hi = T_is_B & en_hi;
 always @(posedge clk or posedge reset) begin: var_proc

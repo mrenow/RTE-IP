@@ -12,18 +12,6 @@ T = TypeVar('T')
 TT = TypeVarTuple('TT')
 
 
-def int_map_to_list(map: dict[T, int], length: int | None = None) -> list[T | None]:
-    '''
-    Convert a map to a list of length `length`, where the value of the map is the index of the list.
-    '''
-    min_len = max(map.values()) + 1
-    if length is None:
-        length = min_len
-    assert min_len <= length
-    res: list[T | None] = [None] * length
-    for k, v in map.items():
-        res[v] = k
-    return res
 
 
 def should_ignore_line(line: str, ignore_metadata: bool = False):
@@ -211,7 +199,6 @@ class ConstSection(Section):
             raise ParsingException(
                 self, line, "Value of rhs of declaration unrecognized")
         constant = RTEMConstant(name)
-        print(constant, self.ass.constant_map)
         if constant in self.ass.constant_map:
             raise ParsingException(
                 self, line, 'Duplicate constant declaration detected.')

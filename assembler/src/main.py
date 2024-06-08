@@ -1,11 +1,11 @@
 from .config import RTEMConfig
 
 from typing import Any, TypeVar, Mapping, TypeVarTuple
-from .sections import *
+from .sections import AssemblerState, Section, EditSection, ByteCode
 from .states import *
 from . import tokens
 from .result import AssemblerResult
-from .helpers import grouper, ParsingException
+from .helpers import grouper, ParsingException, int_map_to_list
 import copy
 
 
@@ -51,9 +51,6 @@ class RTEMAssembler:
     #             self.parse_line(line)
     #     return self.config
 
-    def print_values(self):
-        print('input_vars', self.data.input_vars)
-
     def check_section(self, line: str) -> str | None:
         '''
         Checks if a line is a section. If it is, returns the section name.
@@ -96,9 +93,9 @@ class RTEMAssembler:
 
     def resolve_clock_flags(self):
         clock_flags = 0
-        for k, v in self.data.input_map.items():
-            if isinstance(k, tokens.RTEMClockConstraint):
-                clock_flags |= 1 << v
+        for idx, v in enumerate(int_map_to_list(self.data.input_map)):
+            if isinstance(v, tokens.RTEMClockConstraint):
+                clock_flags |= 1 << idx
         return clock_flags
 
     def resolve_inputs(self):
@@ -178,7 +175,12 @@ class RTEMAssembler:
         return code_lines
 
     def resolve_code_section(self, lines: UnresolvedCode, context_map: Mapping[Any, int]):
-        return [_ for line in lines for _ in self.resolve_string(line, context_map)]
+        resolved: list[str] = []
+        for line in lines:
+            resolved_code = self.resolve_string(line, context_map)
+            print(f'{line} -> {resolved_code}')
+            resolved.append(resolved_code)
+        return resolved
 
     def code_to_bytecode(self, lines):
         # Transform to bitstring into a bytestream, aligned on byte boundaries
@@ -246,15 +248,15 @@ class RTEMAssembler:
         return self.resolve()
 
 
-def verilog_translate_symbols(name: str, bit_len: int, map: dict[Any, int]):
+def verilog_translate_symbols(name: str, bit_len: int, map: dict[Any, int], file=None):
     tab = '    '
-    print(f'function string {name}(input [{bit_len-1}:0] bits);')
-    print(f'{tab}case(bits)')
+    print(f'function string {name}(input [{bit_len-1}:0] bits);', file=file)
+    print(f'{tab}case(bits)', file=file)
     for k, v in map.items():
-        print(f"{tab}{tab}{bit_len}'d{v}: {name} = \"{k}\";")
-    print(f"{tab}{tab}default: {name} = $sformatf(\"<UNRECOGNIZED %d>\", bits);")
-    print(f'{tab}endcase')
-    print('endfunction')
+        print(f"{tab}{tab}{bit_len}'d{v}: {name} = \"{k}\";", file=file)
+    print(f"{tab}{tab}default: {name} = $sformatf(\"<UNRECOGNIZED %d>\", bits);", file=file)
+    print(f'{tab}endcase', file=file)
+    print('endfunction', file=file)
 
 
 '''
@@ -349,8 +351,8 @@ print(ass.data.clock_constraints)
 result = ass.resolve()
 print('Correspondence')
 print(result.print_corresponence())
-ass.print_values()
 print('clock_flags', f'{result.clock_flags: 032b}')
+print(result.final_input_map)
 
 
 config = RTEMConfig(
@@ -363,9 +365,15 @@ config = RTEMConfig(
     tick_length=24,
     main_memory=result.main_memory)
 
+symbol_translation_file = open("../hdl/sim/symbol_translation.sv", 'w')
 config.to_data_file('examples/pacemaker.txt')
-verilog_translate_symbols('get_input_symbol', 5, result.final_input_map)
-verilog_translate_symbols('get_clock_symbol', 3, ass.data.clock_map)
-verilog_translate_symbols('get_imm_symbol', 12, ass.data.constant_map)
-verilog_translate_symbols('get_trans_symbol', 5, ass.data.trans_map)
-verilog_translate_symbols('get_state_symbol', 4, ass.data.state_map)
+verilog_translate_symbols('get_input_symbol', 5,
+                          result.final_input_map, file=symbol_translation_file)
+verilog_translate_symbols('get_clock_symbol', 3,
+                          ass.data.clock_map, file=symbol_translation_file)
+verilog_translate_symbols('get_imm_symbol', 12,
+                          ass.data.constant_map, file=symbol_translation_file)
+verilog_translate_symbols('get_trans_symbol', 5,
+                          ass.data.trans_map, file=symbol_translation_file)
+verilog_translate_symbols('get_state_symbol', 4,
+                          ass.data.state_map, file=symbol_translation_file)

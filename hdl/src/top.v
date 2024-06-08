@@ -1,6 +1,5 @@
 `timescale 1ns / 1ps
 
-
 module top #(parameter TICK_BITS=16, parameter PROG_BITS = 8,parameter STACK_LEN = 6, parameter MEM_LEN=128) (
     input clk,
     input reset,
@@ -69,6 +68,7 @@ module top #(parameter TICK_BITS=16, parameter PROG_BITS = 8,parameter STACK_LEN
     wire [STACK_LEN-1:0] db_stack_T;
     wire [31:0] db_inputs;
     wire [31:0] db_inputs_valid;
+    wire [31:0] db_outputs;
     wire [31:0] db_wires;
     wire [3:0] db_next_state;
     wire [7:0] db_data_A;
@@ -136,6 +136,7 @@ module top #(parameter TICK_BITS=16, parameter PROG_BITS = 8,parameter STACK_LEN
 
 
     // Config Module
+    
     config_module #(MEM_LEN) cfg (
         .clk(clk),
         .reset(scan_reset),
@@ -274,7 +275,7 @@ module top #(parameter TICK_BITS=16, parameter PROG_BITS = 8,parameter STACK_LEN
         .mux_pc_a2(mux_pc_a2),            // B Control: PC_2 := _offs, PC+1;
         .mux_offs(mux_offs),             // B Control: _offs := STA_OFFSET, TRA_OFFSET 
 
-        .mux_JC( mux_JC),         // A Control: JC := n+2, 2, n+2, JC
+        .mux_JC(mux_JC),         // A Control: JC := n+2, 2, n+2, JC
         .mux_mem(mux_mem),              // A Control: Write to MEM @ VAR, addr
 
         // Debug    
@@ -418,6 +419,7 @@ module top #(parameter TICK_BITS=16, parameter PROG_BITS = 8,parameter STACK_LEN
         
         .en_pop(en_pop),                // Control: Pop enable signal
         .en_push(en_push),              // Control: Push enable signal
+        .en_push_force(1'b0),
         .en_stack_wr(en_stack_wr),      // Control: Stack write enable signal
         .mux_sta(mux_sta),              // Control: signal for STA mux
             //debug outputs
@@ -429,7 +431,7 @@ module top #(parameter TICK_BITS=16, parameter PROG_BITS = 8,parameter STACK_LEN
 
 
     // MEM mux
-    assign A_mem_addr = mux_mem ? A_data[4:0] : A_flow_addr; 
+    assign A_mem_addr = mux_mem ? {3'b0, A_data[4:0]} : A_flow_addr; 
         
 
     /*

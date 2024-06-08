@@ -1,5 +1,3 @@
-
-
 module main_memory #(parameter MEM_LEN = 128) (
     input clk,
     input reset,
@@ -17,21 +15,22 @@ module main_memory #(parameter MEM_LEN = 128) (
 //       integer 	i = value;
        begin
           bit_len = -1;
-          for(i=i; i; i = i >> 1) bit_len = bit_len + 1;
+          for(i=i; i != 0; i = i >> 1) bit_len = bit_len + 1;
        end
     endfunction
     localparam ADDR_BITS = bit_len(MEM_LEN);
     localparam NEXT_MEM_BITS = 5;
+    localparam NEXT_MEM_SIZE = 1 << NEXT_MEM_BITS;
     // Memory is filled in from the lowest index
     reg [7:0] memory[MEM_LEN-1:0];
-    wire [7:0] next_memory[NEXT_MEM_BITS-1:0];
+    wire [7:0] next_memory[NEXT_MEM_SIZE-1:0];
 
     assign d_out_0 = memory[addr[ADDR_BITS-1:0]];
     assign d_out_1 = next_memory[addr[NEXT_MEM_BITS-1:0]];
 
     genvar gi;
     generate
-        for (gi = 0; gi < (1<<NEXT_MEM_BITS); gi = gi+1) begin
+        for (gi = 0; gi < NEXT_MEM_SIZE; gi = gi+1) begin
             assign next_memory[gi] = memory[gi+1];
         end
     endgenerate
@@ -42,11 +41,11 @@ module main_memory #(parameter MEM_LEN = 128) (
         integer i;
         if(reset) begin
             for(i=0; i<MEM_LEN; i=i+1) begin
-                memory[i] = 0;
+                memory[i] <= 0;
             end
         end else if(scan_en) begin
             for(i=0; i<MEM_LEN; i=i+1) begin
-                memory[i][7:0] = {memory[i][6:0], i == 0 ? scan_in : memory[i-1][7]};
+                memory[i][7:0] <= {memory[i][6:0], i == 0 ? scan_in : memory[i-1][7]};
             end
         end
     end 

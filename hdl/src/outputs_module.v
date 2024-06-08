@@ -22,7 +22,7 @@ wire [31:0] enable;            // Enable signal
 
 // Multiplexer logic
 
-assign enable = {32{en_load_input}} | ((en_edit & do_write) << addr);
+assign enable = {32{en_load_input}} | ({31'b0, en_edit & do_write} << addr);
 
 // Output buffer register logic
 always @(posedge clk or posedge reset) begin: output_buffer

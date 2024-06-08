@@ -41,7 +41,19 @@ module calculation_module #(
     
     wire [DEPTH-1:0] stack_data_out [0:1];     // Data to be pushed onto the stack
     
+    // Stack data input selection
 
+    wire stack0 = stack_data_out[B][0];
+    wire [1:0] intm2 = {val, stack0};
+    wire [1:0] intm = {op[1] ^ intm2[1], op[0] ^ intm2[0]};
+    
+    wire lu_acc_out = |(intm);
+    wire lu_op_out = lut[op];
+    wire stack_data_in = mux_sta[1]?
+        (mux_sta[0]? lu_acc_out : lu_op_out):
+        val;
+
+        
     shift_register #(.N(DEPTH)) SH_REG_T  (
         .clk(clk), .reset(reset),   
         .wr_en(en_stack_wr & T_is_B),  
@@ -60,21 +72,7 @@ module calculation_module #(
         .out_stack(stack_data_out[E])
     );
 
-    
-    assign stack0 = stack_data_out[B][0];
-    wire [1:0] intm2 = {val, stack0};
-    wire [1:0] intm = {op[1] ^ intm2[1], op[0] ^ intm2[0]};
-    assign lu_acc_out = |(intm);
-    
-    assign lu_op_out = lut[op];
-    
-    // Stack data input selection
-    assign stack_data_in = mux_sta[1]?
-        (mux_sta[0]? lu_acc_out : lu_op_out):
-        val;
-        
-    
-    assign out_stack = stack_data_out[B][4:0];
+    assign out_stack = stack_data_out[B][DEPTH-1:0];
 
     assign db_stack_E = stack_data_out[E];
     assign db_stack_T = stack_data_out[T];

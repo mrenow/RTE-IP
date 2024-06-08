@@ -87,19 +87,15 @@ class RTEMConfig:
                 continue
             bit_length = self.__annotations__[field_name].__metadata__[0]
             field_value = getattr(self, field_name)
-            print(field_name, field_value, bit_length)
             if isinstance(field_value, Sequence):
                 for value in field_value:
                     bytestream += format(value, f'0{bit_length}b')[::-1]
-                    print(format(value, f'0{bit_length}b'))
             else:
                 bytestream += format(field_value, f'0{bit_length}b')[::-1]
-                print(format(field_value, f'0{bit_length}b'))
 
         # Convert bytestream to bytes in chunks
         byte_array = bytearray()
         for i in range(0, len(bytestream), 8):
-            print(bytestream[i:i+8])
             byte_array.append(int(bytestream[i:i+8], 2))
 
         return bytes(byte_array)

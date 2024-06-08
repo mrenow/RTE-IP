@@ -9,7 +9,7 @@ module shift_register #(
     input pop,             // Pop signal
     input push,            // Push signal
     
-    output [N-1:0] out_stack  // 5-bit stack data
+    output [N-1:0] out_stack  // N-bit stack data
 );
 
     // Internal shift register

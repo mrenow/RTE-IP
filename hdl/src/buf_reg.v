@@ -1,4 +1,4 @@
-module register #(parameter N = 1) (
+module buf_reg #(parameter N = 1) (
         input clk,
         input reset,
         input en,
@@ -12,5 +12,4 @@ module register #(parameter N = 1) (
             out_data <= in_data;
         end
     end
-
 endmodule

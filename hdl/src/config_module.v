@@ -1,4 +1,4 @@
-module main_memory #(parameter MEM_LEN = 128) (
+(* KEEP_HIERARCHY = "TRUE", KEEP = "TRUE" *) module main_memory #(parameter MEM_LEN = 128) (
     input clk,
     input reset,
 
@@ -51,7 +51,7 @@ module main_memory #(parameter MEM_LEN = 128) (
     end 
 endmodule
 
-module config_module #(
+(* KEEP_HIERARCHY = "TRUE", KEEP = "TRUE" *) module config_module #(
     parameter MEM_LEN=128,
     parameter PROG_LEN_SIZE=8,
     parameter TICK_LEN_SIZE=16

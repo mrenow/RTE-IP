@@ -1,4 +1,4 @@
-module scan_rom #(
+(* KEEP_HIERARCHY = "TRUE", KEEP = "TRUE" *) module scan_rom #(
     parameter WIDTH = 8 // Width of the scan chain
 ) (
     input clk,       // Clock input

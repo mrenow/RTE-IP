@@ -153,7 +153,7 @@ class Commands():
                 up = int(toks[pos])
                 pos += 1
                 n = int(toks[pos])
-                return TAB(up, 2**n), [f'001{up:01b}{n:04b}'], 8
+                return TAB(up, 2**n), [f'001{up:01b}{2**n:04b}'], 8
             else:  # type 0
                 tok = parse_int(toks[pos])
                 if len(toks[pos:]) > 1 or tok is None:

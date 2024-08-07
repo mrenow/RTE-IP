@@ -34,7 +34,7 @@
 
 module instruction_tb();
 
-parameter TICK_BITS = 16;
+parameter TICK_BITS = 32;
 parameter PROG_BITS = 8;
 parameter STACK_LEN = 6;
 
@@ -175,7 +175,7 @@ always #5 clk = ~clk;
 // declare data 
 
 // Stream in arbitaray length data from a file backwards
-parameter CONF_LEN = 14;
+parameter CONF_LEN = 16;
 parameter MEM_LEN = 128;
 reg [0:7] data [CONF_LEN + MEM_LEN - 1 : 0];
 integer curr_byte;
@@ -197,8 +197,8 @@ function string get_reset_flags(input [7:0] bits);
 endfunction
 function string get_clock_string;
     get_clock_string = {
-        $sformatf("v=%d,", db_clocks[3'd0]),
-        $sformatf("vevent=%d", db_clocks[3'd5])
+        $sformatf("v=%d,", db_clocks[3'd4]),
+        $sformatf("vevent=%d", db_clocks[3'd0])
     };
 endfunction
 
@@ -301,6 +301,18 @@ function string decode_edit_instruction(input [7:0] es, input [7:0] bits, input 
     end
 endfunction
 
+function check_inputs(input string name);
+    check_inputs = inputs[get_input_id(name)];
+endfunction
+
+
+function check_outputs(input string name);
+    check_outputs = outputs[get_input_id(name)];
+endfunction
+
+function void set_inputs(input string name, input value);
+    inputs[get_input_id(name)] = value;
+endfunction
 
 // Task for streaming scanchain
 task monitor_trans;
@@ -417,13 +429,14 @@ endtask
 // endtask
 
 initial begin
-    scan_reset = 1;
-    reset = 1;
+    reset=1;
+    scan_reset=1;
     #10;
     scan_reset = 0;
     // Open the file
     $readmemh("pacemaker.txt", data);
-    stream_data();    
+    stream_data();
+
     /*
     TEST INITIALIZE
     */
@@ -468,58 +481,92 @@ initial begin
     `ASSERT("PC[T]", db_pc_T, PROG_OFFS);
     `ASSERT("ES[T]", db_es_T, STD);
     #10;
-    // // ODD B=T, A=E 
-    // `ASSERT("PC[T]", db_pc_T, ); 
-    // #10;
-    // `ASSERT("PC[T]", db_pc_T, 26); 
-    // #10;
 
-
-    /*
-    Test program:
-    */
-    /*
-.NextTrans
-init: # 7
-    PSH VS | VP
-    PSH AS | AP
-    NXT 0 2  # VS|VP, AS|AP
-        init
-        pre_VSVP vevent=0
-        pre_ASAP vevent=0
-        pre_ASAP vevent=0
-pre_ASAP: # 5 
-    PSH v<aeiTicks !| AS | AP
-    NXT 0 1                             # (v>aeiTicks | AS | AP)
-        pre_ASAP                         # on !(v>aeiTicks | AS | AP)
-        pre_VSVP_pre_URI v=0             # on (v>aeiTicks | AS | AP)
-pre_VSVP: # 6
-    PSH v<aviTicks !|! vevent<lriTicks | VS | VP
-    NXT 0 1
-        pre_VSVP                    # on !(v>aviTicks | vevent>lriTicks | VS | VP)
-        pre_ASAP vevent=0              # on (v>aviTicks | vevent>lriTicks | VS | VP)
-pre_VSVP_pre_URI: # 5
-    PSH vevent<uriTicks
-    PSH VS                     # vevent>uriTicks, VS
-    NXT 0 2
-		pre_VSVP_pre_URI
-		pre_ASAP vevent=0, v=0
-		pre_VSVP  
-		pre_ASAP vevent=0, v=0
-    */
-    
-    
-    
-
-    
-    
-    
-        
-        // Close the file
-    
-    // Rest of your code...
 end
 
+
+initial begin
+    while (reset) #10;
+    set_inputs("AS", 1);  // 0
+    #(`TICK_LENGTH_NS);
+    set_inputs("AS", 0); // 1
+    #(3*`TICK_LENGTH_NS); 
+
+    set_inputs("VS", 1); // 4
+    #(`TICK_LENGTH_NS); 
+    set_inputs("VS", 0); // 5
+    #(13*`TICK_LENGTH_NS);
+    
+    // AP & VP pulsed at the same time: suppress VP
+    set_inputs("AP", 1);  // 0
+    set_inputs("VP", 1);  // 0
+    #`TICK_LENGTH_NS;
+    set_inputs("AP", 0); // 1
+    set_inputs("VP", 0); // 1
+    #(3*`TICK_LENGTH_NS); 
+
+    set_inputs("VS", 1); // 4
+    #(`TICK_LENGTH_NS); 
+    set_inputs("VS", 0); // 5
+    #(13*`TICK_LENGTH_NS);
+
+    // Failure to pulse A.
+    // set_inputs("AS", 1);  // 0
+    #`TICK_LENGTH_NS;
+    // set_inputs("AS", 0); // 1
+    #(6*`TICK_LENGTH_NS); 
+
+    set_inputs("VS", 1); // 4
+    #(`TICK_LENGTH_NS); 
+    set_inputs("VS", 0); // 5
+    #(13*`TICK_LENGTH_NS);
+
+    set_inputs("AS", 1);  // 0
+    #`TICK_LENGTH_NS;
+    set_inputs("AS", 0); // 1
+    #(3*`TICK_LENGTH_NS); 
+
+    // Failure to pulse V
+    // set_inputs("VS", 1); // 4
+    #(`TICK_LENGTH_NS); 
+    // set_inputs("VS", 0); // 5
+    #(16*`TICK_LENGTH_NS);
+
+    set_inputs("AS", 1);  // 0
+    #`TICK_LENGTH_NS;
+    set_inputs("AS", 0); // 1
+    #(3*`TICK_LENGTH_NS); 
+
+    set_inputs("VP", 1); // 4
+    #(`TICK_LENGTH_NS); 
+    set_inputs("VP", 0); // 5
+    #(13*`TICK_LENGTH_NS);
+
+    set_inputs("AP", 1);  // 0
+    #`TICK_LENGTH_NS;
+    set_inputs("AP", 0); // 1
+    #(3*`TICK_LENGTH_NS); 
+
+    set_inputs("VS", 1); // 4
+    #(`TICK_LENGTH_NS); 
+    set_inputs("VS", 0); // 5
+    #(13*`TICK_LENGTH_NS);
+    
+    set_inputs("VP", 1); // 4
+    #(13*`TICK_LENGTH_NS);
+    set_inputs("VP", 0); // 4
+    set_inputs("AP", 1); // 4
+    #(13*`TICK_LENGTH_NS);
+    set_inputs("VP", 1); // 4
+    #(13*`TICK_LENGTH_NS);
+    set_inputs("AP", 0); // 4
+    set_inputs("VP", 0); // 
+    
+    
+    
+    
+
+end
 // Rest of your code...
     
 

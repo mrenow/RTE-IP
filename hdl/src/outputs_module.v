@@ -17,13 +17,11 @@ module outputs_module(
 );
 
 // Internal signals
-wire [31:0] data_mux_out;      // Output of the multiplexer
 wire [31:0] enable;            // Enable signal
 
 // Multiplexer logic
 
 assign enable = {32{en_load_input}} | ({31'b0, en_edit & do_write} << addr);
-
 // Output buffer register logic
 always @(posedge clk or posedge reset) begin: output_buffer
     integer i;
@@ -32,7 +30,8 @@ always @(posedge clk or posedge reset) begin: output_buffer
     end else begin
         for (i=0; i<32; i=i+1) begin
             if(enable[i]) begin
-                out_buf[i] <= mux_data ? in_data[i]: val;
+                $display("%d, %b, %b, %b", i, mux_data, in_data[i], val);
+                out_buf[i] <= mux_data ? val: in_data[i];
             end
         end
     end

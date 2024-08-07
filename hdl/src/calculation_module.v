@@ -12,9 +12,10 @@ module calculation_module #(
     
     input en_push_force,        // B Control: Force a push
     input en_pop,               // B Control: Whether a pop command should trigger a pop
+    input en_pop_force,         // B Control: Force a pop
     input en_push,              // B Control: Whether a ~pop command should trigger a push
     input en_stack_wr,          // B Control: Whether to write to stack
-    input [1:0] mux_sta,        // B Control: STACK[0] <= ACC, STA, val, val
+    input [1:0] mux_sta,        // B Control: STACK[0] <= ACC, LUT, val, val
     
     //debug outputs
     output [DEPTH-1:0] db_stack_E,     // Stack output data
@@ -44,11 +45,10 @@ module calculation_module #(
     // Stack data input selection
 
     wire stack0 = stack_data_out[B][0];
-    wire [1:0] intm2 = {val, stack0};
-    wire [1:0] intm = {op[1] ^ intm2[1], op[0] ^ intm2[0]};
+    wire stack1 = stack_data_out[B][1];
+    wire lu_acc_out = (op[1] ^ val) | (op[0] ^ stack0);
     
-    wire lu_acc_out = |(intm);
-    wire lu_op_out = lut[op];
+    wire lu_op_out = lut[{stack1, stack0}];
     wire stack_data_in = mux_sta[1]?
         (mux_sta[0]? lu_acc_out : lu_op_out):
         val;
@@ -58,7 +58,7 @@ module calculation_module #(
         .clk(clk), .reset(reset),   
         .wr_en(en_stack_wr & T_is_B),  
         .wr_data(stack_data_in),
-        .pop(en_pop & do_pop & T_is_B),    
+        .pop(((en_pop & do_pop) | en_pop_force) & T_is_B),    
         .push(((en_push & ~do_pop) | en_push_force) & T_is_B),
         .out_stack(stack_data_out[T])
     );
@@ -67,7 +67,7 @@ module calculation_module #(
         .clk(clk), .reset(reset),   
         .wr_en(en_stack_wr & E_is_B),  
         .wr_data(stack_data_in),
-        .pop(en_pop & do_pop & E_is_B),    
+        .pop(((en_pop & do_pop) | en_pop_force) & E_is_B),    
         .push(((en_push & ~do_pop) | en_push_force) & E_is_B),
         .out_stack(stack_data_out[E])
     );

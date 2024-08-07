@@ -1,7 +1,3 @@
-
-`include "register.v"
-
-
 module controller #(parameter TICK_BITS=16, parameter PROG_BITS = 8)(
     input clk,
     input reset,
@@ -50,13 +46,14 @@ module controller #(parameter TICK_BITS=16, parameter PROG_BITS = 8)(
     output reg en_next_state,        // B Control: Enable writing to next state
     // Output Module
     output reg en_edit,              // B Control: Edit outputs
-    output reg mux_data,             // B Control: OUTPUTS[VAR] = inputs, val
+    output reg mux_data,             // B Control: OUTPUTS[VAR] = val, inputs
     // Stack Module
     output reg en_push_force,        // B Control: Force a push
     output reg en_pop,               // B Control: Whether a pop command should trigger a pop
+    output reg en_pop_force,         // B Control: Force a pop
     output reg en_push,              // B Control: Whether a ~pop command should trigger a push
     output reg en_stack_wr,          // B Control: Whether to write to stack
-    output reg [1:0] mux_sta,        // B Control: STACK[0] = ACC, STA, val, val
+    output reg [1:0] mux_sta,        // B Control: STACK[0] = ACC, LUT, val, val
 
     // Unknown control
 
@@ -150,7 +147,7 @@ module controller #(parameter TICK_BITS=16, parameter PROG_BITS = 8)(
 
 
     wire do_cycle;
-    
+    wire do_setup;
 
     // output [1:0] mux_JC,         // A Control: JC := n+2, 2, JC, DEC JC
     // output reg mux_mem,              // A Control: Write to MEM @ addr, VAR
@@ -266,13 +263,14 @@ module controller #(parameter TICK_BITS=16, parameter PROG_BITS = 8)(
     // output reg en_next_state,        // B Control: Enable writing to next state
     // // Output Module
     // output reg en_edit,              // B Control: Edit outputs
-    // output reg mux_data,             // B Control: OUTPUTS[VAR] = inputs, val
+    // output reg mux_data,             // B Control: OUTPUTS[VAR] = val, inputs
     // // Stack Module
     // output reg en_push_force,        // B Control: Force a push
     // output reg en_pop,               // B Control: Whether a pop command should trigger a pop
+    // output reg en_pop_force,         // B Control: Force a pop
     // output reg en_push,              // B Control: Whether a ~pop command should trigger a push
     // output reg en_stack_wr,          // B Control: Whether to write to stack
-    // output reg [1:0] mux_sta,        // B Control: STACK[0] = ACC, STA, val, val
+    // output reg [1:0] mux_sta,        // B Control: STACK[0] = ACC, LUT, val, val
     // State machine
 
     reg [7:0] next_es_B;
@@ -303,6 +301,7 @@ module controller #(parameter TICK_BITS=16, parameter PROG_BITS = 8)(
             T_TRA: next_es_B = FINISH;
             FINISH: next_es_B = do_setup ? SETUP : FINISH;
             E_EDIT: next_es_B = finish ? FINISH : (ex ? E_EDIT : STD);
+            default: next_es_B = 0;
         endcase
     end
 
@@ -333,9 +332,10 @@ module controller #(parameter TICK_BITS=16, parameter PROG_BITS = 8)(
         en_next_state = 0;
         // Module
         en_edit = 0; // Dont edit outputs
-        mux_data = 0; // OUTPUTS[VAR] = 0
+        mux_data = 0; // OUTPUTS[VAR] = inputs
         // Stack Module
         en_push_force = 0; // Dont force a push
+        en_pop_force = 0; // Done force a pop
         en_pop = 0; // Dont pop
         en_push = 0; // Dont push
         en_stack_wr = 0; // Dont write to stack
@@ -398,7 +398,9 @@ module controller #(parameter TICK_BITS=16, parameter PROG_BITS = 8)(
                         // {pop,lut}:=VAR
                         // If pop:
                         // -> POP()
-                        en_pop = 1;
+                        en_push = 1;
+                        en_stack_wr = 1;
+                        mux_sta = 2; // LUT
                         // $0=lut[{$1,$0}]
                         // If EX:
                         // -> ES=EACC
@@ -417,11 +419,9 @@ module controller #(parameter TICK_BITS=16, parameter PROG_BITS = 8)(
                     if (input_invalid) begin
                         en_pc = 0;
                     end else begin
-                        en_push = 1;
                         en_push_force = 1;
                         en_stack_wr = 1;
                         mux_sta = 0;
-                        mux_data = 1;
                     end
                 end
                 2'b01: begin
@@ -437,7 +437,7 @@ module controller #(parameter TICK_BITS=16, parameter PROG_BITS = 8)(
                     // If EX:
                     // -> ES=ACC
                     en_stack_wr = 1;
-                    mux_sta = 2; // STA
+                    mux_sta = 2; // LUT
                 end
                 2'b11: begin
                     // DO
@@ -457,11 +457,9 @@ module controller #(parameter TICK_BITS=16, parameter PROG_BITS = 8)(
                     // this should never happen
                     en_pc = 0;
                 end else begin
-                    en_push = 1;
                     en_push_force = 1;
                     en_stack_wr = 1;
                     mux_sta = 0;
-                    mux_data = 1;
                 end
             end
 
@@ -535,7 +533,8 @@ module controller #(parameter TICK_BITS=16, parameter PROG_BITS = 8)(
             E_EDIT: begin
                 // Done
                 en_edit = 1;
-                en_pop = ~(finish| ex);
+                en_pop_force = ~(finish| ex);
+                mux_data = 1; // OUTPUTS[VAR] = val
             end
             FINISH: begin
                 // TODO: Check timing
@@ -558,12 +557,12 @@ module controller #(parameter TICK_BITS=16, parameter PROG_BITS = 8)(
         end
     end
 
-    parameter BIT_DIFF = TICK_BITS - PROG_BITS;
+    localparam BIT_DIFF = TICK_BITS - PROG_BITS;
     assign event_flush = global_clock == {{BIT_DIFF{1'b0}}, cfg_prog_len, 1'b1};
     wire _do_setup_0 = global_clock == 0;
     wire _do_setup_1;
-    register do_setup_reg (clk, reset, 1'b1, _do_setup_0, _do_setup_1);
-    wire do_setup = _do_setup_0 | _do_setup_1;  // assert signal for two cycles.
+    buf_reg do_setup_reg (clk, reset, 1'b1, _do_setup_0, _do_setup_1);
+    assign do_setup = _do_setup_0 | _do_setup_1;  // assert signal for two cycles.
     assign event_setup = _do_setup_0;
     
 

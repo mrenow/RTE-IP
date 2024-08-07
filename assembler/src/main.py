@@ -142,10 +142,12 @@ class RTEMAssembler:
                 trans_resets.append('00000000')
                 trans_states.append('0000')
 
+        if len(trans_states) % 2 == 1:  
+            trans_states.append('0000')  # pad with 0s
+
         # pack trans_states such that the 4-bytes words are swapped in each byte
         packed_trans_states = [word0 + word1 for word0,
                                word1 in grouper(reversed(trans_states), 2, incomplete='strict')]
-
         return packed_trans_states + trans_resets
 
     def resolve_state_section(self, context_map: Mapping[Any, int], trans_offset: int) -> tokens.Code:
@@ -259,91 +261,45 @@ def verilog_translate_symbols(name: str, bit_len: int, map: dict[Any, int], file
     print('endfunction', file=file)
 
 
-'''
-'''
+def verilog_translate_ids(name: str, bit_len: int, map: dict[Any, int], file=None):
+    tab = '    '
+    print(f'function [{bit_len-1}:0] {name}(input string symbol);', file=file)
+    print(f'{tab}case(symbol)', file=file)
+    for v, k in map.items():
+        print(f"{tab}{tab}\"{v}\": {name} = {bit_len}'d{k};", file=file)
+    print(f"{tab}{tab}default: {name} = {{{bit_len}{{1'bx}}}};", file=file)
+    print(f'{tab}endcase', file=file)
+    print('endfunction', file=file)
 
-test = '''
-.Constants
-aviTicks=3
-aeiTicks=8
-uriTicks=18
-lriTicks=19
-.NextTrans
-init: # 7
-    PSH VS | VP
-    PSH AS | AP
-    NXT 0 2  # VS|VP, AS|AP
-        init
-        pre_VSVP vevent=0
-        pre_ASAP vevent=0
-        pre_ASAP vevent=0
-pre_ASAP: # 5
-    PSH v<aeiTicks !| AS | AP
-    NXT 0 1                             # (v>aeiTicks | AS | AP)
-        pre_ASAP                         # on !(v>aeiTicks | AS | AP)
-        pre_VSVP_pre_URI v=0             # on (v>aeiTicks | AS | AP)
-pre_VSVP: # 6
-    PSH v<aviTicks !|! vevent<lriTicks | VS | VP
-    NXT 0 1
-        # on !(v>aviTicks | vevent>lriTicks | VS | VP)
-        pre_VSVP
-        # on (v>aviTicks | vevent>lriTicks | VS | VP)
-        pre_ASAP vevent=0
-pre_VSVP_pre_URI: # 5
-    PSH vevent<uriTicks
-    PSH VS                     # vevent>uriTicks, VS
-    NXT 0 2
-        pre_VSVP
-        pre_ASAP vevent=0, v=0
-        pre_VSVP_pre_URI
-        pre_ASAP vevent=0, v=0
-.NextEdits
-init:  # 3
-    PSH AP
-    EDI $0
-        VP=0 END
-pre_ASAP: # 6
-    PSH v<aeiTicks
-    PSH AP          # v>aeiTicks, (v>aeiTicks|AP) & VP
-    EDI $0 or ~$1
-        AP=0
-    EDI $0 and ~$1
-        VP=1 END
-pre_VSVP: # 6,
-    PSH v<aviTicks !|! vevent<lriTicks
-    EDI $0 or $1
-        VP = 1
-    EDI $0 and $1
-        AP = 0 END
-pre_VSVP_pre_URI: # 6,
-    PSH VP
-    EDI !$0
-        VP=0
-    PSH vevent<uriTicks
-    EDI !$0
-        AP=0 END
-'''
+
+def verilog_set_defines(map: dict[str, int], prefix: str = "", file=None):
+    for k, v in map.items():
+        print(f'`define {prefix}{k} {v}', file=file)
+
 
 ass = RTEMAssembler(
     'pre_ASAP',
     inputs=dict(
-        AS=30,
-        AP=31
+        AS=28,
+        VS=29,
+        AP=30,
+        VP=31
     ),
     clocks=dict(
         # clocks
-        v=0,
-        vevent=5
+        vevent=0,
+        v=5
     ),
-    # constants=dict(
-    #     aviTicks=3,
-    #     aeiTicks=8,
-    #     uriTicks=18,
-    #     lriTicks=19
-    # )
+    constants=dict(
+        # aviTicks=3, #x500x10000
+        # aeiTicks=17, #x500x10000
+        # uriTicks=4, #x1000x10000
+        # lriTicks=10  #x1000x10000
+    )
 )
-# program = tokens.RTEMConfig(ass.parse_string(test))
-# res = ass.parse_string(test)
+f = open('examples/rtem/pacemaker.rtem')
+test = f.read()
+f.close()
 for line in test.split('\n'):
     ass.parse_line(line)
 
@@ -353,20 +309,51 @@ print('Correspondence')
 print(result.print_corresponence())
 print('clock_flags', f'{result.clock_flags: 032b}')
 print(result.final_input_map)
+print(result.assembler_state.constant_map)
 
+
+# config = RTEMConfig(
+#     state_offset=result.state_offset,
+#     trans_offset=result.trans_offset,
+#     clock_flags=result.clock_flags,
+#     clock_divider_immediate_values=(999, 0, 0, 499),
+#     clock_joins=0,
+#     program_length_sub1=12,
+#     tick_length_sub1=9999,
+#     main_memory=result.main_memory)
 
 config = RTEMConfig(
     state_offset=result.state_offset,
     trans_offset=result.trans_offset,
     clock_flags=result.clock_flags,
-    clock_divider_immediate_values=(2, 0, 0, 1),
+    clock_divider_immediate_values=(9, 0, 0, 4),
     clock_joins=0,
-    program_length=12,
-    tick_length=24,
-    main_memory=result.main_memory)
+    program_length_sub1=12,
+    # tick_length_sub1=4999999*5*5,
+    tick_length_sub1=49,
+    main_memory=result.main_memory,
+    config_root_cell='*/top_0/inst/cfg/'
+)
+
+
+# config = RTEMConfig(
+#     state_offset=result.state_offset,
+#     trans_offset=result.trans_offset,
+#     clock_flags=result.clock_flags,
+#     clock_divider_immediate_values=(9, 0, 0, 4),
+#     clock_joins=0,
+#     program_length_sub1=12,
+#     tick_length_sub1=99,
+#     main_memory=result.main_memory)
 
 symbol_translation_file = open("../hdl/sim/symbol_translation.sv", 'w')
-config.to_data_file('examples/pacemaker.txt')
+config.to_data_file('../hdl/sim/pacemaker.txt')
+verilog_set_defines({
+    "TICK_LENGTH": config.tick_length_sub1 + 1,
+    "TICK_LENGTH_NS": (config.tick_length_sub1 + 1)*20,
+    "PROGRAM_LENGTH": config.program_length_sub1 + 1
+}, file=symbol_translation_file)
+
 verilog_translate_symbols('get_input_symbol', 5,
                           result.final_input_map, file=symbol_translation_file)
 verilog_translate_symbols('get_clock_symbol', 3,
@@ -377,3 +364,18 @@ verilog_translate_symbols('get_trans_symbol', 5,
                           ass.data.trans_map, file=symbol_translation_file)
 verilog_translate_symbols('get_state_symbol', 4,
                           ass.data.state_map, file=symbol_translation_file)
+verilog_translate_ids('get_input_id', 5, result.final_input_map, file=symbol_translation_file)
+
+config2 = RTEMConfig(
+    state_offset=result.state_offset,
+    trans_offset=result.trans_offset,
+    clock_flags=result.clock_flags,
+    clock_divider_immediate_values=(999, 0, 0, 499),
+    clock_joins=0,
+    program_length_sub1=12,
+    tick_length_sub1=5000-1,
+    main_memory=result.main_memory,
+    config_root_cell='*/top_0/inst/cfg/'
+)
+
+config2.to_xdc('examples/pacemaker.xdc')

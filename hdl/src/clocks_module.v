@@ -28,7 +28,6 @@ module clocks_module(
 );
 
 
-
 // Clock and divider counters
 wire [11:0] counters [7:0];
 
@@ -85,8 +84,9 @@ generate
         for (k=0; k<12; k=k+1) begin 
             assign clock_array_transpose[k][j] = counters[j][k];
         end
-        // if (j!=7) assign carry_ins[j+1] = carry_outs[j];
-        assign carry_ins[(j+1)%8] = carry_outs[j];        
+        
+        if (j!=7) assign carry_ins[j+1] = carry_outs[j]; // To remove combinatorial loop, but compromise clk0 -> clk7 join
+        //assign carry_ins[(j+1)%8] = carry_outs[j];        
     end
     
     // clock select
@@ -113,7 +113,7 @@ module divided_clock #(parameter N = 4, parameter P = 12, parameter D = 10)(
 
     input clk,                       // Clock signal
     input reset,                     // Asynchronous reset signal
-    input reset_sync,
+    input reset_sync,                // reset clock on enable signal
     input en,
 
     input carry_in,
@@ -132,21 +132,31 @@ assign do_increment = join_previous? carry_in: divider_is_zero;
 assign carry_out = & counter_internal & do_increment;
 
 
+reg reset_latch = 0;
+always @(posedge clk or posedge reset) begin
+    if (reset) begin
+        reset_latch <= 0;
+    end else begin
+        if (reset_sync) reset_latch <= 1;
+        if (en) reset_latch <= 0; 
+    end
+end 
+wire reset_sync_combined = reset_latch | reset_sync;
+
+
 assign counter = {{(P-N){1'b0}}, counter_internal};
 // Clock increment logic
 always @(posedge clk or posedge reset) begin: clock_process
     if (reset) begin
         counter_internal <= 0;
         divider <= 0;
-    end else if (reset_sync) begin
-        counter_internal <= 0;
-        divider <= 0;
     end else if(en) begin
         // Clock divider updates. The divider will have a cycle time of CLK_DIV_CONF + 1
-        if (do_increment) counter_internal <= counter_internal + 1;
+        if (do_increment) counter_internal <= (reset_sync_combined ?  0 : counter_internal) + 1;
+        else counter_internal <= (reset_sync_combined ?  0 : counter_internal);
         
         if (divider_is_zero) divider <= divider_max;
-        else divider <= divider - 1;
+        else divider <= (reset_sync_combined ? divider_max : divider) - 1; 
     end
 end
 endmodule
@@ -168,15 +178,25 @@ reg [N-1:0] counter_internal;
 wire do_increment = join_previous? carry_in : 1;
 assign carry_out = & counter_internal & do_increment;
 assign counter = {{(P-N){1'b0}}, counter_internal};
-wire inc = en & do_increment;
+
+reg reset_latch = 0;
+always @(posedge clk or posedge reset) begin
+    if (reset) begin
+        reset_latch <= 0;
+    end else begin
+        if (reset_sync) reset_latch <= 1;
+        if (en) reset_latch <= 0; 
+    end
+end 
+wire reset_sync_combined = reset_latch | reset_sync;
+
 // Clock increment logic
 always @(posedge clk or posedge reset) begin: basic_clock_process
     if (reset) begin
         counter_internal <= 0;
-    end else if (reset_sync) begin
-        counter_internal <= 0;
-    end else if (inc) begin                
-        counter_internal <= counter_internal + 1;
+    end else if (en) begin
+        if (do_increment) counter_internal <= (reset_sync_combined ?  0 : counter_internal) + 1;
+        else counter_internal <= (reset_sync_combined ?  0 : counter_internal);
     end
 end
 endmodule

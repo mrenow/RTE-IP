@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
-
-module top #(parameter TICK_BITS=16, parameter PROG_BITS = 8,parameter STACK_LEN = 6, parameter MEM_LEN=128) (
+(* KEEP_HIERARCHY = "TRUE" *)
+module top #(parameter TICK_BITS=32, parameter PROG_BITS = 8,parameter STACK_LEN = 6, parameter MEM_LEN=128) (
     input clk,
     input reset,
     
@@ -8,6 +8,13 @@ module top #(parameter TICK_BITS=16, parameter PROG_BITS = 8,parameter STACK_LEN
     input scan_en,
     input scan_reset,
     output scan_out,
+    output db_out_0,
+    output db_out_1,
+    output db_out_2,
+    output db_out_3,
+    output db_out_4,
+    output event_flush,
+    output event_setup,
 
 `ifdef XILINX_SIMULATOR
     // Debug outputs for state variables
@@ -137,7 +144,7 @@ module top #(parameter TICK_BITS=16, parameter PROG_BITS = 8,parameter STACK_LEN
 
     // Config Module
     
-    config_module #(MEM_LEN) cfg (
+    config_module #(MEM_LEN, PROG_BITS, TICK_BITS) cfg (
         .clk(clk),
         .reset(scan_reset),
         .scan_in(scan_in),
@@ -227,6 +234,7 @@ module top #(parameter TICK_BITS=16, parameter PROG_BITS = 8,parameter STACK_LEN
         .en_push_force(en_push_force),        // B Control: Force a push
         .en_pop(en_pop),               // B Control: Whether a pop command should trigger a pop
         .en_push(en_push),              // B Control: Whether a ~pop command should trigger a push
+        .en_pop_force(en_pop_force),        // B Control: Force a pop
         .en_stack_wr(en_stack_wr),          // B Control: Whether to write to stack
         .mux_sta(mux_sta),        // B Control: STACK[0] <= ACC, STA, val, val
 
@@ -246,8 +254,8 @@ module top #(parameter TICK_BITS=16, parameter PROG_BITS = 8,parameter STACK_LEN
     
     wire violation_result = | ((edit_result ^ current_inputs) & ~cfg_clk_flags);
     
-    register #(.N(32)) out_reg(clk, reset, event_flush, edit_result, outputs);
-    register vio_reg(clk, reset, event_flush, violation_result, violation);
+    buf_reg #(.N(32)) out_reg(clk, reset, event_flush, edit_result, outputs);
+    buf_reg vio_reg(clk, reset, event_flush, violation_result, violation);
     
     
     /*
@@ -293,7 +301,7 @@ module top #(parameter TICK_BITS=16, parameter PROG_BITS = 8,parameter STACK_LEN
     /*
     Parsing
     */
-    register #(.N(4)) reg_nxt_state(clk, reset, en_next_state, B_data[3:0], A_next_state);
+    buf_reg #(.N(4)) reg_nxt_state(clk, reset, en_next_state, B_data[3:0], A_next_state);
     
     parsing p_module (
         .clk(clk),             // Clock signal
@@ -358,6 +366,11 @@ module top #(parameter TICK_BITS=16, parameter PROG_BITS = 8,parameter STACK_LEN
     /*
     Input loading
     */
+//    input_capture i_buf (
+//        .clk(clk),
+//        .r(event_setup),
+//        .s(),
+//        .
     
     inputs_module i_module (
         .clk(clk),                 // Clock signal
@@ -407,6 +420,7 @@ module top #(parameter TICK_BITS=16, parameter PROG_BITS = 8,parameter STACK_LEN
 
     wire [1:0] _c_op = B_data[7:6];
     wire _c_do_pop = B_data[4];
+    
     calculation_module c_module (
         .clk(clk),                      // Clock signal
         .reset(reset | event_setup),    // Asynchronous reset signal
@@ -419,7 +433,8 @@ module top #(parameter TICK_BITS=16, parameter PROG_BITS = 8,parameter STACK_LEN
         
         .en_pop(en_pop),                // Control: Pop enable signal
         .en_push(en_push),              // Control: Push enable signal
-        .en_push_force(1'b0),
+        .en_push_force(en_push_force),  // Control: Force push signal
+        .en_pop_force(en_pop_force),    // Control: Force pop signal
         .en_stack_wr(en_stack_wr),      // Control: Stack write enable signal
         .mux_sta(mux_sta),              // Control: signal for STA mux
             //debug outputs
@@ -431,8 +446,7 @@ module top #(parameter TICK_BITS=16, parameter PROG_BITS = 8,parameter STACK_LEN
 
 
     // MEM mux
-    assign A_mem_addr = mux_mem ? {3'b0, A_data[4:0]} : A_flow_addr; 
-        
+    assign A_mem_addr = mux_mem ? {3'b0, A_data[4:0]} : A_flow_addr;
 
     /*
     Additional dbug outputs
@@ -450,8 +464,36 @@ module top #(parameter TICK_BITS=16, parameter PROG_BITS = 8,parameter STACK_LEN
     assign db_cycle=cycle;
     assign db_event_flush=event_flush;
     assign db_event_setup=event_setup;
-
     
-        
-
+    // debug thingo
+    localparam STATE_SIZE = 2;
+    reg [31:0] _db_counter = 0;
+    reg [STATE_SIZE - 1:0] _db_state = 0;
+    reg [4:0] _db_vec = 0;
+    always @(posedge clk) begin
+        if (db_event_setup) begin
+            _db_counter <= 0;
+            _db_state <= 0;
+        end else if (cycle) begin
+            if (_db_counter == cfg_tick_len[TICK_BITS - 1: STATE_SIZE]) begin
+                _db_counter <= 0;
+                _db_state <= _db_state + 1;
+            end else begin
+                _db_counter <= _db_counter + 1;
+            end
+        end 
+    end
+    always @(*) begin
+        case(_db_state)
+            0: _db_vec = 5'b10000;
+            1: _db_vec = {1'b0, db_clock_0}; // 10 hz
+            2: _db_vec = {1'b0, db_clock_4}; // 
+            3: _db_vec = {1'b0, db_next_state};
+        endcase
+    end
+    assign db_out_0 = _db_vec[0];
+    assign db_out_1 = _db_vec[1];
+    assign db_out_2 = _db_vec[2];
+    assign db_out_3 = _db_vec[3];
+    assign db_out_4 = _db_vec[4];
 endmodule

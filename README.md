@@ -1,13 +1,23 @@
 # Description
 
+A small, custom processor designed to implement runtime enforcers. Runtime enforcers have been proposed for use in safety critical applications, such as medical devices. You can think of this runtime enforcer as an policeman which is separate to the untrusted main application. The runtime enforcer has an idea of safe inputs and safe outputs, and has the power to edit these inputs and outputs to become safe if safety is breached. This allows for an application to continue running safetly in the event of a bug or security breach, albeit with a reduced quality of service.
 
+See the presentation to get what it's about!
+[https://docs.google.com/presentation/d/1MqBNqoKpEoUFEp4tej2J4nzEGpCZc6iSfH66eGvUEvM/edit#slide=id.p](https://docs.google.com/presentation/d/1MqBNqoKpEoUFEp4tej2J4nzEGpCZc6iSfH66eGvUEvM/edit?usp=sharing)
 
-|SETUP  |FLUSH
-|
-|[      ]
+This project was produced under the supervision of Dr. Hammond Pearce ([github](https://github.com/kiwih) an honors thesis to satisfy the requirement for a bachelor's degree in Computer Engineering at UNSW.
 
+## Features:
+Allows compact representation and fast execution of runtime enforcer policies, specified as mealy state machines.
 
-
+100MHz clock speed on a Zynq SOC
+Max 256B of program ROM
+32 inputs & clock conditions combined
+16 distinct states
+32 distinct transitions
+8-bit instructions
+4x 4-bit clocks, and 4x 12-bit clocks, with 10-bit dividers
+Nearly all practical clock conditions possible
 
 ## Registers
 **Instruction Pieces**

@@ -21,32 +21,32 @@ Allows compact representation and fast execution of runtime enforcer policies, s
 
 ## Registers
 **Instruction Pieces**
-`DATA[7:5]`: opcode, and extension code typically.
-`DATA[4]`: Sometimes the highest bit of a 5-bit address.
-`DATA[3:0]`: Usually an address.
-`HI(1)`: Affects Whether to select the high or low half nibble of the byte to load into `DATA[3:0]`.
+- `DATA[7:5]`: opcode, and extension code typically.
+- `DATA[4]`: Sometimes the highest bit of a 5-bit address.
+- `DATA[3:0]`: Usually an address.
+- `HI(1)`: Affects Whether to select the high or low half nibble of the byte to load into `DATA[3:0]`.
 **Program Flow**
-`EC(4)`: One-hot encoded execution cycle for the multi-cycle design.
-`ES(?)`: Execution State. Exact size of this register may be to the disgression of the HDL synthesis tool. 
-`PC(8)`: Program Counter
-`RA(8)`: Return Address.
-`JC(3)`: Jump Counter. Counts down after each instruction, loading `PC<=RA` once it reaches 0. 
+- `EC(4)`: One-hot encoded execution cycle for the multi-cycle design.
+- `ES(?)`: Execution State. Exact size of this register may be to the disgression of the HDL synthesis tool. 
+- `PC(8)`: Program Counter
+- `RA(8)`: Return Address.
+- `JC(3)`: Jump Counter. Counts down after each instruction, loading `PC<=RA` once it reaches 0. 
 **Resources**
-`CLKS(8, (4 or 12))`: Clocks
-`MEM(256, 8)`: Main memory
-`IN(32)`: Set of input variables
-`IN_INVALID(32)`: Indicates which clock constraints are not yet calculated on this policy state
+- `CLKS(8, (4 or 12))`: Clocks
+- `MEM(256, 8)`: Main memory
+- `IN(32)`: Set of input variables
+- `IN_INVALID(32)`: Indicates which clock constraints are not yet calculated on this policy state
 **Output**
-`EDIT_D(32)`: Edit data
-`NEXT_STATE(4)`
+- `EDIT_D(32)`: Edit data
+- `NEXT_STATE(4)`
 **Static Config**
-`cfg_trans_offs(8)`: Address around which transition data is defined.
-`cfg_state_offs(8)`: Address after which the starting addresses for each state are defined.
-`cfg_prog_len(PROG_LEN_SIZE)`: Number of ticks until buffer flush
-`cfg_tick_len(TICK_LEN_SIZE)`: Number of ticks between transitions
-`cfg_clk_flags(32)`: Indicates which rows of memory are clocks
-`cfg_clk_joins(8)`: Indicates which clocks are joined to the previous clock
-`cfg_clk_div_imm(40)`: Indicates 
+- `cfg_trans_offs(8)`: Address around which transition data is defined.
+- `cfg_state_offs(8)`: Address after which the starting addresses for each state are defined.
+- `cfg_prog_len(PROG_LEN_SIZE)`: Number of ticks until buffer flush
+- `cfg_tick_len(TICK_LEN_SIZE)`: Number of ticks between transitions
+- `cfg_clk_flags(32)`: Indicates which rows of memory are clocks
+- `cfg_clk_joins(8)`: Indicates which clocks are joined to the previous clock
+- `cfg_clk_div_imm(40)`: Indicates 
 
 # Signals
 Signals are either boolean values read from pins, or clock constraints (i.e. the boolean value returned when comparing one clock to a fixed constant). Signals are stored in a 5-bit addressed memory with two bits: `{data, valid}`. Now only the pin-signals are loaded in upon entry to a policy state, and their valid bits are set to 1 (which signals are from pins is configured using the `cfg_clk_flags` config). If the input address refers to a clock constraint, it is not loaded until it is requested. Whether or not to request a variable is determined through the valid bit in the memory. The value of the clock constraint is then determined by instructions in main memory which correspond to the signal address.
@@ -109,13 +109,13 @@ Execution State allows us to interpret bytes differently depending on the contex
 
 # Instruction Tables
 ## KEY
-`<=` Assignment on clock edge
-`:=` Alias definition
-`{a,b,c}` signal concatenation
-`PUSH(), POP()` push/pop commands on stack
-`$0, $1` First & second elements of stack.
-`UPPERCASE` Global identifier
-`lowercase` local alias for a signal
+- `<=` Assignment on clock edge
+- `:=` Alias definition
+- `{a,b,c}` signal concatenation
+- `PUSH(), POP()` push/pop commands on stack
+- `$0, $1` First & second elements of stack.
+- `UPPERCASE` Global identifier
+- `lowercase` local alias for a signal
 
 
 ## For Edit Machine
@@ -174,7 +174,3 @@ Note: In the Code Column, \* indicates that the instruction is shared between th
 | FINSH       | Wait until trigger condition                                                                   | if `t>1`                                                                                                       |     |
 |             |                                                                                                |                                                                                                                |     |
 
-
-`PC`
-`PC<=cfg_trans_offs + ~addr`
-`PC<=cfg_trans_offs + ~VAR`

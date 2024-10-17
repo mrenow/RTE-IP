@@ -10,14 +10,14 @@ This project was produced under the supervision of Dr. Hammond Pearce ([github](
 ## Features:
 Allows compact representation and fast execution of runtime enforcer policies, specified as mealy state machines.
 
-100MHz clock speed on a Zynq SOC
-Max 256B of program ROM
-32 inputs & clock conditions combined
-16 distinct states
-32 distinct transitions
-8-bit instructions
-4x 4-bit clocks, and 4x 12-bit clocks, with 10-bit dividers
-Nearly all practical clock conditions possible
+- 100MHz clock speed on a Zynq SOC
+- Max 256B of program ROM
+- 32 inputs & clock conditions combined
+- 16 distinct states
+- 32 distinct transitions
+- 8-bit instructions
+- 4x 4-bit clocks, and 4x 12-bit clocks, with 10-bit dividers
+- Nearly all practical clock conditions possible
 
 ## Registers
 **Instruction Pieces**
